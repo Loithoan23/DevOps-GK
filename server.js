@@ -11,6 +11,9 @@ app.use(express.json());
 let products = [
   { name: 'Sản phẩm A', price: 100000 },
   { name: 'Sản phẩm B', price: 200000 },
+  { name: 'Sản phẩm A', price: 100000 },
+  { name: 'Sản phẩm A', price: 100000 },
+  { name: 'Sản phẩm B', price: 200000 },
   { name: 'Sản phẩm A', price: 100000 }
 ];
 
