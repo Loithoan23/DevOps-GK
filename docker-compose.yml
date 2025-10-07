@@ -1,1 +1,27 @@
+version: '3.8'
 
+services:
+  # Tên service là 'backend' để khớp với lệnh `docker-compose push backend` trong file CI/CD
+  backend:
+    # Đặt tên cho container để khớp với lệnh deploy trên server
+    container_name: crud-app-backend
+
+    # Build image từ Dockerfile trong thư mục hiện tại
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Đặt tên cho image, sử dụng biến môi trường DOCKER_USERNAME từ pipeline CI/CD
+    # 'local-user' là giá trị mặc định nếu biến không được set (khi chạy local)
+    image: ${DOCKER_USERNAME:-local-user}/crud-app:latest
+
+    # Ánh xạ cổng để truy cập ứng dụng
+    ports:
+      - "3000:3000"
+
+    # Nạp các biến môi trường từ file .env cho môi trường local
+    env_file:
+      - .env
+
+    # Tự động khởi động lại container nếu nó bị dừng
+    restart: always
