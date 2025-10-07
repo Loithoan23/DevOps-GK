@@ -9,11 +9,6 @@ app.use(express.json());
 
 // Dữ liệu tạm
 let products = [
-  { name: 'Sản phẩm A', price: 100000 },
-  { name: 'Sản phẩm B', price: 200000 },
-  { name: 'Sản phẩm A', price: 100000 },
-  { name: 'Sản phẩm A', price: 100000 },
-  { name: 'Sản phẩm B', price: 200000 },
   { name: 'Sản phẩm A', price: 100000 }
 ];
 
