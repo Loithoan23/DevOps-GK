@@ -1,4 +1,4 @@
-name: CRUD App CI/CD (safe)
+name: CRUD App CI/CD
 
 on:
   push:
@@ -7,50 +7,43 @@ on:
     branches: [ main ]
 
 jobs:
-  ci-cd:
+  # Job 1: Continuous Integration - Kiểm tra chất lượng code
+  ci:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Use Node.js 18
+      - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies (retry-safe)
-        run: |
-          npm ci || npm install
-
-      - name: Verify package.json exists
-        run: test -f package.json && echo "package.json found"
+      - name: Install dependencies
+        run: npm ci
 
       - name: Run tests if present
-        run: |
-          npm run -s test > test.log 2>&1 || echo "No tests configured or tests failed, check test.log"
+        # --if-present sẽ chỉ chạy script nếu nó tồn tại trong package.json
+        # Job sẽ thất bại nếu script chạy và trả về lỗi.
+        run: npm run test --if-present
 
       - name: Run lint if present
-        run: |
-          npm run -s lint > lint.log 2>&1 || echo "No lint script configured or lint failed, check lint.log"
+        run: npm run lint --if-present
 
-      - name: Build application
-        run: |
-          npm run -s build || echo "No build script configured"
-
-      - name: Install Docker Compose
-        run: |
-          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
+  # Job 2: Continuous Deployment - Build và Deploy lên server
+  deploy:
+    # Job này cần job 'ci' chạy thành công trước
+    needs: ci
+    # Chỉ chạy khi có push vào nhánh main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          install: true
-          version: latest
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -58,44 +51,38 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker images
-        env:
-          DOCKER_BUILDKIT: 1
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        run: |
-          docker-compose -f docker-compose.yml build --build-arg BUILDKIT_INLINE_CACHE=1
-          docker-compose -f docker-compose.yml push backend
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/crud-app:latest
 
       - name: Deploy to production server
-        if: github.event_name == 'push' # Only deploy on push, not pull_request
         uses: appleboy/ssh-action@v1.0.3
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            cd crud-app
-            echo "${{ secrets.DOCKER_COMPOSE_FILE }}" > docker-compose.yml
-            docker-compose config || { echo "Error in Docker Compose file"; exit 1; }
-            echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
-            docker-compose pull
+            # Di chuyển vào thư mục dự án trên server (tạo nếu chưa có)
+            cd ~/crud-app || exit 1
+
+            # Ghi file docker-compose cho production từ secret
+            echo "${{ secrets.DOCKER_COMPOSE_PROD_FILE }}" > docker-compose.prod.yml
+
+            # Đăng nhập vào Docker Hub trên server
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+            # Pull image mới nhất
+            docker pull ${{ secrets.DOCKER_USERNAME }}/crud-app:latest
+
+            # Dừng và xóa container cũ
             docker ps -a --filter "name=crud-app-backend" --format '{{.ID}}' | xargs -r docker stop || true
             docker ps -a --filter "name=crud-app-backend" --format '{{.ID}}' | xargs -r docker rm || true
-            docker-compose up -d
+
+            # Khởi động container mới bằng file compose của production
+            docker-compose -f docker-compose.prod.yml up -d
+
+            # Dọn dẹp các image cũ không còn được sử dụng
             docker image prune -f
-            timeout 60 bash -c 'until docker-compose ps | grep "Up"; do echo "Waiting for containers to start..."; sleep 5; done' || exit 1
-
-      - name: Archive test and lint logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-lint-logs
-          path: |
-            test.log
-            lint.log
-
-      - name: Success marker
-        run: echo "CI/CD finished successfully"
