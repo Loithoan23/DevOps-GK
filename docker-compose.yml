@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Tên service là 'backend' để khớp với lệnh `docker-compose push backend` trong file CI/CD
   backend:
