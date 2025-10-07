@@ -10,7 +10,6 @@ async function fetchProducts() {
   const products = await res.json();
   renderProducts(products);
 }
-
 function renderProducts(products) {
   list.innerHTML = '';
   products.forEach((p, i) => {
@@ -26,7 +25,6 @@ function renderProducts(products) {
     list.appendChild(tr);
   });
 }
-
 form.addEventListener('submit', async e => {
   e.preventDefault();
   const name = nameInput.value.trim();
