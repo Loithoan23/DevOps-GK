@@ -96,3 +96,5 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/crud-app:latest # Tên image sẽ được push lên Docker Hub
+      - name: Wait for Docker Hub to update
+        run: sleep 10
